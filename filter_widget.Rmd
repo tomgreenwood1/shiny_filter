@@ -1,0 +1,90 @@
+---
+title: "a filtering widget for shiny documents"
+author: "Tom Greenwood"
+date: "11/04/2019"
+output: 
+ html_document:
+  code_folding: show
+  css: greenwood-style.css  
+  theme: united
+  highlight: zenburn
+runtime: shiny
+
+---
+
+This is an example of a shiny widget in rmarkdown. It uses the shiny function renderUI, mapped over a selections of column names, to allow the user to first choose which columns to filter on, and then choose which values of those columns should be included in the filter.
+
+Below is the widget function
+
+```{r, message=FALSE, warning=FALSE}
+
+
+shiny_filters <- function(df) {
+  
+library(shiny)
+library(DT)
+library(tidyverse, warn.conflicts = FALSE)
+  
+# first, we create a vector of all the column names
+col_names <- df %>% names
+
+shinyApp(
+  
+  ui = 
+  fluidPage(
+    # this input allows the user to choose which columns to filter on
+    checkboxGroupInput("filtChoices", "choose filter conditions", choices = col_names),
+    # look in the server function to see how this uiOutput is created
+    uiOutput("boxes"),
+    # ditto above
+    DTOutput("dt")
+
+    
+  ),
+  server = function(input, output, session) {
+   # this creates checkboxes for each of the selected filters
+   output$boxes <- renderUI({
+	  input$filtChoices %>% map(. %>% { expr(checkboxGroupInput(!!., 
+    	                                                 !!. , 
+    	                                                 choices = df[[!!.]] %>% unique(),
+    	                                                 selected = df[[!!.]] %>% unique()
+    	                             )) } %>% 
+    		         eval )
+   })
+
+# then render the summary, based on the filtering conditions
+  output$dt <- renderDT({
+
+	validate(need(length(input$filtChoices) != 0, "no filtering conditions selected" ))
+	
+	tnames <- input$filtChoices 
+  snames <- input$filtChoices %>% syms
+
+  filter_expr <- map2(snames, tnames, ~ expr(!!.x %in% input[[!!.y]])) %>%
+ 	             reduce(~ expr(!!.x & !!.y))
+
+	df %>% filter(!!filter_expr)
+
+	})
+}
+
+)
+}
+
+
+```
+
+Then we can use the widget on any data.frame we like, for instance
+
+```{r message=FALSE, warning=FALSE}
+shiny_filters(mtcars)
+```
+
+Or, alternatively
+
+```{r message=FALSE, warning=FALSE}
+shiny_filters(iris)
+```
+
+
+
